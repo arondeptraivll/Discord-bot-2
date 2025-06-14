@@ -184,7 +184,7 @@ async def start2_command(interaction: discord.Interaction):
         description="Nhấn nút bên dưới để mở biểu mẫu và cấu hình thông tin cần thiết.",
         color=discord.Color.purple()
     )
-    embed.set_footer(text="Bot được phát triển với giao diện UI hiện đại.")
+    embed.set_footer(text="Bot by Gemlogin Tool.")
     
     await interaction.response.send_message(embed=embed, view=StartView(), ephemeral=True)
 
