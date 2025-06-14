@@ -166,15 +166,23 @@ class StartView(ui.View):
         # Khi nút được nhấn, mở Modal NGLConfigModal
         await interaction.response.send_modal(NGLConfigModal())
 
-# --- ĐỊNH NGHĨA LỆNH SLASH /start2 ---
+# --- ĐỊNH NGHĨA LỆNH SLASH /start2 (ĐÃ SỬA LỖI) ---
 @tree.command(name="start2", description="Bắt đầu tác vụ NGL với giao diện cấu hình.")
 async def start2_command(interaction: discord.Interaction):
     """Lệnh chính để bắt đầu quy trình."""
+    
+    # ### SỬA LỖI ###
+    # Trì hoãn phản hồi ngay lập tức để tránh lỗi timeout 3 giây.
+    # ephemeral=True sẽ làm cho cả thông báo "Thinking..." và các tin nhắn followup sau đó
+    # chỉ hiển thị cho người dùng gọi lệnh.
+    await interaction.response.defer(ephemeral=True)
+
     # 1. Kiểm tra kênh
     if interaction.channel.id != ALLOWED_CHANNEL_ID:
-        await interaction.response.send_message(
-            f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>.",
-            ephemeral=True
+        # ### SỬA LỖI ###
+        # Sử dụng `followup.send()` để gửi tin nhắn sau khi đã defer().
+        await interaction.followup.send(
+            f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>."
         )
         return
     
@@ -186,7 +194,9 @@ async def start2_command(interaction: discord.Interaction):
     )
     embed.set_footer(text="Bot by Gemlogin Tool.")
     
-    await interaction.response.send_message(embed=embed, view=StartView(), ephemeral=True)
+    # ### SỬA LỖI ###
+    # Sử dụng `followup.send()` để gửi phản hồi chính.
+    await interaction.followup.send(embed=embed, view=StartView())
 
 
 # --- CÁC SỰ KIỆN CỦA BOT ---
