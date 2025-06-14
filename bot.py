@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, ui # Thêm ui để sử dụng View, Modal, Button
+from discord import app_commands, ui
 import os
 import requests
 import time
@@ -51,17 +51,14 @@ def start_ngl_spam(username: str, message: str, count: int, progress_callback: c
                     sent_count += 1
                 else:
                     failed_count += 1
-                    # Nếu thất bại liên tục, có thể NGL đã chặn, nên dừng lại một chút
                     if failed_count % 10 == 0: 
                         time.sleep(5)
             except requests.exceptions.RequestException:
                 failed_count += 1
                 time.sleep(2)
             
-            # Gọi lại để cập nhật tiến trình trên Discord
             progress_callback(sent_count, failed_count, count)
     
-    # Báo cáo cuối cùng
     progress_callback(sent_count, failed_count, count, finished=True)
 
 # --- GIAO DIỆN NGƯỜI DÙNG (MODAL VÀ VIEW) ---
@@ -69,143 +66,89 @@ def start_ngl_spam(username: str, message: str, count: int, progress_callback: c
 class NGLConfigModal(ui.Modal, title='📝 Cấu hình NGL Spamer'):
     """Biểu mẫu (Modal) để người dùng nhập thông tin."""
     
-    # Input cho Username
-    username_input = ui.TextInput(
-        label='👤 Tên người dùng NGL',
-        placeholder='ví dụ: elonmusk',
-        required=True,
-        style=discord.TextStyle.short
-    )
-    
-    # Input cho Nội dung tin nhắn
-    message_input = ui.TextInput(
-        label='💬 Nội dung tin nhắn',
-        placeholder='Nội dung bạn muốn gửi...',
-        required=True,
-        style=discord.TextStyle.long, # Cho phép nhập nhiều dòng
-        max_length=250
-    )
-    
-    # Input cho Số lượng
-    count_input = ui.TextInput(
-        label='🔢 Số lần gửi (tối đa 100)',
-        placeholder='ví dụ: 50',
-        required=True,
-        max_length=3
-    )
+    username_input = ui.TextInput(label='👤 Tên người dùng NGL', placeholder='ví dụ: elonmusk', required=True, style=discord.TextStyle.short)
+    message_input = ui.TextInput(label='💬 Nội dung tin nhắn', placeholder='Nội dung bạn muốn gửi...', required=True, style=discord.TextStyle.long, max_length=250)
+    count_input = ui.TextInput(label='🔢 Số lần gửi (tối đa 100)', placeholder='ví dụ: 50', required=True, max_length=3)
     
     async def on_submit(self, interaction: discord.Interaction):
         """Hàm được gọi khi người dùng nhấn nút 'Submit' trên biểu mẫu."""
+
+        # === SỬA LỖI TIMEOUT QUAN TRỌNG ===
+        # Defer ngay lập tức để tránh lỗi "Unknown Interaction" khi bot cần thời gian xử lý.
+        # Thao tác này sẽ hiển thị "Bot is thinking..." cho người dùng.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         
-        # Lấy giá trị từ các ô input
         ngl_username = self.username_input.value
         message = self.message_input.value
         
-        # Kiểm tra và chuyển đổi 'count' thành số
         try:
             count = int(self.count_input.value)
             if not (1 <= count <= 100):
-                await interaction.response.send_message("❌ Lỗi: Số lượng phải từ 1 đến 100.", ephemeral=True)
+                # Sử dụng followup.send vì đã defer
+                await interaction.followup.send("❌ Lỗi: Số lượng phải từ 1 đến 100.", ephemeral=True)
                 return
         except ValueError:
-            await interaction.response.send_message("❌ Lỗi: Số lượng phải là một con số hợp lệ.", ephemeral=True)
+            await interaction.followup.send("❌ Lỗi: Số lượng phải là một con số hợp lệ.", ephemeral=True)
             return
-
-        # Phản hồi ban đầu để người dùng biết bot đã nhận lệnh và đang xử lý
-        await interaction.response.send_message("🚀 Chuẩn bị khởi chạy... Vui lòng đợi.", ephemeral=True)
 
         # ---- Hàm nội bộ để cập nhật tiến trình ----
         async def update_progress_embed(sent, failed, total, finished=False):
             """Hàm async để chỉnh sửa tin nhắn Embed với tiến trình mới nhất."""
             progress = (sent + failed) / total
             progress_bar = '█' * int(progress * 20) + '─' * (20 - int(progress * 20))
-
-            if finished:
-                color = discord.Color.green()
-                title = "✅ Tác vụ Hoàn Thành!"
-            else:
-                color = discord.Color.blue()
-                title = "🏃 Đang thực thi... "
+            color = discord.Color.green() if finished else discord.Color.blue()
+            title = "✅ Tác vụ Hoàn Thành!" if finished else "🏃 Đang thực thi..."
             
-            embed = discord.Embed(
-                title=title,
-                description=f"Đang gửi tin nhắn tới **{ngl_username}**.",
-                color=color
-            )
+            embed = discord.Embed(title=title, description=f"Đang gửi tin nhắn tới **{ngl_username}**.", color=color)
             embed.add_field(name="Tiến trình", value=f"`[{progress_bar}]` {int(progress * 100)}%", inline=False)
             embed.add_field(name="✅ Thành công", value=f"{sent}/{total}", inline=True)
             embed.add_field(name="❌ Thất bại", value=f"{failed}/{total}", inline=True)
             embed.set_footer(text=f"Yêu cầu bởi {interaction.user.display_name}")
 
-            # Chỉnh sửa tin nhắn gốc mà người dùng đã thấy ("Chuẩn bị khởi chạy...")
+            # Chỉnh sửa phản hồi gốc (thay thế tin "Thinking...").
             await interaction.edit_original_response(content=None, embed=embed)
 
         # ---- Hàm gọi lại (callback) an toàn cho luồng ----
         def thread_safe_callback(sent, failed, total, finished=False):
-            """Hàm này được luồng spam gọi. Nó sẽ lên lịch chạy hàm async trên luồng chính của bot."""
-            # Tạo một coroutine để chạy trên luồng chính
             coro = update_progress_embed(sent, failed, total, finished)
-            # Lên lịch để coroutine đó chạy an toàn trên event loop của bot
             asyncio.run_coroutine_threadsafe(coro, client.loop)
 
         # Khởi chạy luồng xử lý spam và truyền hàm callback vào
-        spam_thread = threading.Thread(
-            target=start_ngl_spam,
-            args=(ngl_username, message, count, thread_safe_callback)
-        )
+        spam_thread = threading.Thread(target=start_ngl_spam, args=(ngl_username, message, count, thread_safe_callback))
         spam_thread.start()
 
 
 class StartView(ui.View):
     """View chứa nút để mở Modal cấu hình."""
     def __init__(self):
-        super().__init__(timeout=None) # timeout=None để view không bị vô hiệu hóa
+        super().__init__(timeout=None)
 
     @ui.button(label='🚀 Bắt đầu Cấu hình', style=discord.ButtonStyle.primary, custom_id='start_config_button')
     async def start_button(self, interaction: discord.Interaction, button: ui.Button):
-        # Khi nút được nhấn, mở Modal NGLConfigModal
+        # Mở Modal khi nhấn nút. Đây là một phản hồi tức thì và vẫn có thể
+        # bị timeout nếu nền tảng quá lag, nhưng không có cách nào defer() được.
         await interaction.response.send_modal(NGLConfigModal())
 
-# --- ĐỊNH NGHĨA LỆNH SLASH /start2 (ĐÃ SỬA LỖI) ---
+# --- ĐỊNH NGHĨA LỆNH SLASH /start2 ---
 @tree.command(name="start2", description="Bắt đầu tác vụ NGL với giao diện cấu hình.")
 async def start2_command(interaction: discord.Interaction):
     """Lệnh chính để bắt đầu quy trình."""
-    
-    # ### SỬA LỖI ###
-    # Trì hoãn phản hồi ngay lập tức để tránh lỗi timeout 3 giây.
-    # ephemeral=True sẽ làm cho cả thông báo "Thinking..." và các tin nhắn followup sau đó
-    # chỉ hiển thị cho người dùng gọi lệnh.
     await interaction.response.defer(ephemeral=True)
 
-    # 1. Kiểm tra kênh
     if interaction.channel.id != ALLOWED_CHANNEL_ID:
-        # ### SỬA LỖI ###
-        # Sử dụng `followup.send()` để gửi tin nhắn sau khi đã defer().
-        await interaction.followup.send(
-            f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>."
-        )
+        await interaction.followup.send(f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>.")
         return
     
-    # 2. Hiển thị View với nút "Bắt đầu"
-    embed = discord.Embed(
-        title="🌟 Chào mừng đến với NGL Spamer",
-        description="Nhấn nút bên dưới để mở biểu mẫu và cấu hình thông tin cần thiết.",
-        color=discord.Color.purple()
-    )
+    embed = discord.Embed(title="🌟 Chào mừng đến với NGL Spamer", description="Nhấn nút bên dưới để mở biểu mẫu và cấu hình thông tin cần thiết.", color=discord.Color.purple())
     embed.set_footer(text="Bot by Gemlogin Tool.")
     
-    # ### SỬA LỖI ###
-    # Sử dụng `followup.send()` để gửi phản hồi chính.
     await interaction.followup.send(embed=embed, view=StartView())
 
 
 # --- CÁC SỰ KIỆN CỦA BOT ---
 @client.event
 async def on_ready():
-    # Thêm View vào bot để nó hoạt động sau khi khởi động lại
-    # Điều này quan trọng để các nút cũ vẫn hoạt động
     client.add_view(StartView())
-    
     await tree.sync()
     print(f'Logged in as {client.user} (ID: {client.user.id})')
     print('Bot is ready and slash commands are synced.')
@@ -214,7 +157,6 @@ async def on_ready():
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
-
 
 # --- KHỞI CHẠY BOT ---
 if __name__ == "__main__":
