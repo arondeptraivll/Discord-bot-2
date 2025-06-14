@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ngl-discord-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python bot.py"
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false # Bạn sẽ tự điền giá trị này trên trang của Render
+      - key: PYTHON_VERSION
+        value: 3.11.4 # Hoặc phiên bản python bạn muốn dùng
