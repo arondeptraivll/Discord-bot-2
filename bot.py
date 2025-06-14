@@ -90,18 +90,33 @@ class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
         await interaction.response.defer(ephemeral=True)
         key = self.key_input.value.strip().upper()
         keys = load_keys()
-        if key not in keys: await interaction.followup.send(embed=discord.Embed(title="❌ Xác thực Thất bại", color=discord.Color.red()), ephemeral=True); return
+        if key not in keys:
+            await interaction.followup.send(embed=discord.Embed(title="❌ Xác thực Thất bại", color=discord.Color.red()), ephemeral=True); return
         expires_at = datetime.fromisoformat(keys[key]['expires_at'])
         if datetime.now(timezone.utc) > expires_at:
             await interaction.followup.send(embed=discord.Embed(title="⌛ Mã Hết Hạn", color=discord.Color.orange()), ephemeral=True)
             del keys[key]; save_keys(keys); return
-        success_embed = discord.Embed(title="✅ Xác thực Thành công!", description="Giờ bạn có thể bắt đầu cấu hình tác vụ.", color=discord.Color.brand_green())
-        await interaction.message.edit(embed=success_embed, view=ConfigView())
+            
+        # ### SỬA LỖI ### - Gửi một tin nhắn mới thay vì cố gắng edit tin nhắn cũ.
+        success_embed = discord.Embed(
+            title="✅ Xác thực Thành công!",
+            description="Mã của bạn hợp lệ. Giờ bạn có thể bắt đầu cấu hình tác vụ.",
+            color=discord.Color.brand_green()
+        )
+        # Gửi tin nhắn mới với View chứa nút "Mở cấu hình Spam"
+        await interaction.followup.send(embed=success_embed, view=ConfigView(), ephemeral=True)
 
 class StartView(ui.View):
     def __init__(self): super().__init__(timeout=None)
     @ui.button(label='Bắt đầu', style=discord.ButtonStyle.success, emoji='🚀', custom_id='start_key_entry_button')
-    async def start_button(self, interaction: discord.Interaction, button: ui.Button): await interaction.response.send_modal(KeyEntryModal())
+    async def start_button(self, interaction: discord.Interaction, button: ui.Button):
+        # `send_modal` có thể bị timeout nếu Render "cold start" quá lâu.
+        # Đây là giới hạn của nền tảng, không phải lỗi code.
+        try:
+            await interaction.response.send_modal(KeyEntryModal())
+        except discord.NotFound:
+            await interaction.followup.send("⏳ Bot đang khởi động, vui lòng thử lại sau vài giây.", ephemeral=True)
+
 
 # --- LỆNH DISCORD ---
 @tree.command(name="start2", description="Bắt đầu tác vụ NGL với giao diện cấu hình.")
