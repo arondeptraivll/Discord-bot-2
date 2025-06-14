@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 TOKEN = os.getenv('DISCORD_TOKEN')
 if not TOKEN: print("LỖI: Vui lòng thiết lập biến môi trường DISCORD_TOKEN."); exit()
 
-ADMIN_USER_ID = 123456789012345678 # <<< THAY ID CỦA BẠN VÀO ĐÂY
+# ID của bạn đã được cập nhật
+ADMIN_USER_ID = 1380084257631895725
 KEYS_FILE = 'keys.json'
 ALLOWED_CHANNEL_ID = 1383289311289544824 
 
@@ -27,14 +28,20 @@ def load_keys():
     try:
         with open(KEYS_FILE, 'r') as f: return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError): return {}
+
 def save_keys(keys_data):
     with open(KEYS_FILE, 'w') as f: json.dump(keys_data, f, indent=4)
 
-# --- WEB SERVER CHO UPTIME ROBOT ---
-app = Flask(__name__);
-@app.route('/');
-def home(): return "Bot is alive and ready for commands!"
-def run_flask(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+# --- WEB SERVER CHO UPTIME ROBOT (ĐÃ SỬA LỖI SYNTAX) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive and ready for commands!"
+
+def run_flask():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 # --- LOGIC GỬI NGL ---
 def start_ngl_spam(username: str, message: str, count: int, progress_callback: callable):
@@ -49,7 +56,9 @@ def start_ngl_spam(username: str, message: str, count: int, progress_callback: c
                 else:
                     failed_count += 1
                     if failed_count % 10 == 0: time.sleep(5)
-            except requests.exceptions.RequestException: failed_count += 1; time.sleep(2)
+            except requests.exceptions.RequestException:
+                failed_count += 1
+                time.sleep(2)
             progress_callback(sent_count, failed_count, count)
     if count != float('inf'): progress_callback(sent_count, failed_count, count, finished=True)
 
@@ -66,6 +75,7 @@ class NGLConfigModal(ui.Modal, title='🚀 Cấu hình NGL Spamer'):
         count = float('inf') if count_str == 'inf' else (int(count_str) if count_str.isdigit() and int(count_str) > 0 else 0)
         if count == 0 and count_str != 'inf':
             await interaction.followup.send("❌ Lỗi: Số lượng không hợp lệ. Vui lòng nhập số lớn hơn 0 hoặc 'inf'.", ephemeral=True); return
+        
         async def update_progress_embed(sent, failed, total, finished=False):
             is_infinite, color = (total == float('inf')), discord.Color.green() if finished else discord.Color.blue()
             title = "✅ Tác vụ Hoàn Thành!" if finished else "🏃 Đang thực thi..."
@@ -81,11 +91,11 @@ class NGLConfigModal(ui.Modal, title='🚀 Cấu hình NGL Spamer'):
                 embed.add_field(name="✅ Thành công", value=f"{sent}/{total}", inline=True); embed.add_field(name="❌ Thất bại", value=f"{failed}", inline=True)
             embed.set_footer(text=f"Yêu cầu bởi {interaction.user.display_name}")
             await interaction.edit_original_response(content=None, embed=embed)
+        
         def cb(sent, failed, total, finished=False): asyncio.run_coroutine_threadsafe(update_progress_embed(sent, failed, total, finished), client.loop)
         threading.Thread(target=start_ngl_spam, args=(ngl_username, message, count, cb)).start()
 
-# ### SỬA LỖI ###
-# Tách View ra để có thể hiển thị sau khi xác thực key thành công
+
 class ConfigView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -99,7 +109,6 @@ class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
     key_input = ui.TextInput(label='🔑 Mã kích hoạt', placeholder='Dán mã kích hoạt của bạn vào đây...', required=True)
     
     async def on_submit(self, interaction: discord.Interaction):
-        # Defer ngay lập tức để có thời gian xử lý và có thể chỉnh sửa tin nhắn gốc
         await interaction.response.defer(ephemeral=True)
         key = self.key_input.value.strip().upper()
         keys = load_keys()
@@ -119,14 +128,7 @@ class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
             del keys[key]; save_keys(keys)
             return
 
-        # ### SỬA LỖI ### - Thay vì mở modal, chúng ta cập nhật tin nhắn và hiển thị một View mới
-        success_embed = discord.Embed(
-            title="✅ Xác thực Thành công!",
-            description="Mã của bạn hợp lệ. Giờ bạn có thể bắt đầu cấu hình tác vụ.",
-            color=discord.Color.brand_green()
-        )
-        # Chỉnh sửa tin nhắn gốc mà người dùng đã thấy lệnh /start2
-        # `interaction.message` trỏ đến tin nhắn chứa nút bấm "Bắt đầu"
+        success_embed = discord.Embed(title="✅ Xác thực Thành công!", description="Mã của bạn hợp lệ. Giờ bạn có thể bắt đầu cấu hình tác vụ.", color=discord.Color.brand_green())
         await interaction.message.edit(embed=success_embed, view=ConfigView())
 
 class StartView(ui.View):
@@ -141,7 +143,7 @@ class StartView(ui.View):
 @tree.command(name="start2", description="Bắt đầu tác vụ NGL với giao diện cấu hình.")
 async def start2_command(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    if interaction.channel_id != ALLOWED_CHANNEL_ID:
+    if interaction.channel.id != ALLOWED_CHANNEL_ID:
         await interaction.followup.send(f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>."); return
     embed = discord.Embed(title="🌟 NGL Spamer - Kích hoạt bằng Giấy phép", description="> Để tiếp tục, bạn cần có một mã kích hoạt (license key) hợp lệ. Nhấn nút **Bắt đầu** bên dưới để nhập mã của bạn.", color=discord.Color.purple())
     embed.add_field(name="Làm thế nào để có mã?", value="Vui lòng liên hệ với **Admin** của server để nhận mã kích hoạt.", inline=False)
@@ -176,9 +178,8 @@ async def generate_key(interaction: discord.Interaction, duration: str = "7d"):
 
 @client.event
 async def on_ready():
-    # Phải thêm tất cả các View bền vững vào đây
     client.add_view(StartView())
-    client.add_view(ConfigView()) # ### SỬA LỖI ###
+    client.add_view(ConfigView())
     await tree.sync()
     print(f'Logged in as {client.user} (ID: {client.user.id})')
     print('Bot is ready and slash commands are synced.')
