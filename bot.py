@@ -46,9 +46,7 @@ def start_ngl_spam(username: str, message: str, count: int, progress_callback: c
             try:
                 response = session.post('https://ngl.link/api/submit', headers=headers, data=data, timeout=10)
                 if response.status_code == 200: sent_count += 1
-                else:
-                    failed_count += 1
-                    if failed_count % 10 == 0: time.sleep(5)
+                else: failed_count += 1; time.sleep(5)
             except requests.exceptions.RequestException: failed_count += 1; time.sleep(2)
             progress_callback(sent_count, failed_count, count)
     if count != float('inf'): progress_callback(sent_count, failed_count, count, finished=True)
@@ -59,13 +57,11 @@ class NGLConfigModal(ui.Modal, title='🚀 Cấu hình NGL Spamer'):
     username_input = ui.TextInput(label='👤 Tên người dùng NGL', placeholder='ví dụ: elonmusk', required=True)
     message_input = ui.TextInput(label='💬 Nội dung tin nhắn', placeholder='Nội dung bạn muốn gửi...', required=True, style=discord.TextStyle.long, max_length=250)
     count_input = ui.TextInput(label='🔢 Số lần gửi (gõ "inf" để chạy vô hạn)', placeholder='ví dụ: 500 hoặc inf', required=True, max_length=10)
-
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         ngl_username, message, count_str = self.username_input.value, self.message_input.value, self.count_input.value.strip().lower()
         count = float('inf') if count_str == 'inf' else (int(count_str) if count_str.isdigit() and int(count_str) > 0 else 0)
-        if count == 0 and count_str != 'inf':
-            await interaction.followup.send("❌ Lỗi: Số lượng không hợp lệ.", ephemeral=True); return
+        if count == 0 and count_str != 'inf': await interaction.followup.send("❌ Lỗi: Số lượng không hợp lệ.", ephemeral=True); return
         async def update_progress_embed(sent, failed, total, finished=False):
             is_infinite, color = (total == float('inf')), discord.Color.green() if finished else discord.Color.blue()
             title = "✅ Tác vụ Hoàn Thành!" if finished else "🏃 Đang thực thi..."
@@ -75,21 +71,18 @@ class NGLConfigModal(ui.Modal, title='🚀 Cấu hình NGL Spamer'):
                 embed.add_field(name="Trạng thái", value="`♾️ Đang chạy không ngừng...`", inline=False)
                 embed.add_field(name="✅ Đã gửi", value=f"{sent}", inline=True); embed.add_field(name="❌ Thất bại", value=f"{failed}", inline=True)
             else:
-                progress = (sent + failed) / total
-                progress_bar = '█' * int(progress * 20) + '─' * (20 - int(progress * 20))
-                embed.add_field(name="Tiến trình", value=f"`[{progress_bar}]` {int(progress * 100)}%", inline=False)
+                progress_bar = '█' * int(((sent + failed) / total) * 20) + '─' * (20 - int(((sent + failed) / total) * 20))
+                embed.add_field(name="Tiến trình", value=f"`[{progress_bar}]` {int(((sent + failed) / total) * 100)}%", inline=False)
                 embed.add_field(name="✅ Thành công", value=f"{sent}/{total}", inline=True); embed.add_field(name="❌ Thất bại", value=f"{failed}", inline=True)
             embed.set_footer(text=f"Yêu cầu bởi {interaction.user.display_name}")
             await interaction.edit_original_response(content=None, embed=embed)
-        def cb(sent, failed, total, finished=False): asyncio.run_coroutine_threadsafe(update_progress_embed(sent, failed, total, finished), client.loop)
+        def cb(s, f, t, fin=False): asyncio.run_coroutine_threadsafe(update_progress_embed(s, f, t, fin), client.loop)
         threading.Thread(target=start_ngl_spam, args=(ngl_username, message, count, cb)).start()
 
 class ConfigView(ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+    def __init__(self): super().__init__(timeout=None)
     @ui.button(label='🚀 Mở Cấu hình Spam', style=discord.ButtonStyle.primary, custom_id='open_config_modal_button')
-    async def open_config_button(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(NGLConfigModal())
+    async def open_config_button(self, interaction: discord.Interaction, button: ui.Button): await interaction.response.send_modal(NGLConfigModal())
 
 class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
     key_input = ui.TextInput(label='🔑 Mã kích hoạt', placeholder='Dán mã kích hoạt của bạn vào đây...', required=True)
@@ -97,14 +90,10 @@ class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
         await interaction.response.defer(ephemeral=True)
         key = self.key_input.value.strip().upper()
         keys = load_keys()
-        if key not in keys:
-            embed = discord.Embed(title="❌ Xác thực Thất bại", description="Mã kích hoạt không tồn tại.", color=discord.Color.red())
-            await interaction.followup.send(embed=embed, ephemeral=True); return
-        key_data, now = keys[key], datetime.now(timezone.utc)
-        expires_at = datetime.fromisoformat(key_data['expires_at'])
-        if now > expires_at:
-            embed = discord.Embed(title="⌛ Mã Hết Hạn", description="Mã đã hết hạn.", color=discord.Color.orange())
-            await interaction.followup.send(embed=embed, ephemeral=True)
+        if key not in keys: await interaction.followup.send(embed=discord.Embed(title="❌ Xác thực Thất bại", color=discord.Color.red()), ephemeral=True); return
+        expires_at = datetime.fromisoformat(keys[key]['expires_at'])
+        if datetime.now(timezone.utc) > expires_at:
+            await interaction.followup.send(embed=discord.Embed(title="⌛ Mã Hết Hạn", color=discord.Color.orange()), ephemeral=True)
             del keys[key]; save_keys(keys); return
         success_embed = discord.Embed(title="✅ Xác thực Thành công!", description="Giờ bạn có thể bắt đầu cấu hình tác vụ.", color=discord.Color.brand_green())
         await interaction.message.edit(embed=success_embed, view=ConfigView())
@@ -112,32 +101,26 @@ class KeyEntryModal(ui.Modal, title='🛡️ Xác thực Giấy phép'):
 class StartView(ui.View):
     def __init__(self): super().__init__(timeout=None)
     @ui.button(label='Bắt đầu', style=discord.ButtonStyle.success, emoji='🚀', custom_id='start_key_entry_button')
-    async def start_button(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(KeyEntryModal())
+    async def start_button(self, interaction: discord.Interaction, button: ui.Button): await interaction.response.send_modal(KeyEntryModal())
 
 # --- LỆNH DISCORD ---
-
 @tree.command(name="start2", description="Bắt đầu tác vụ NGL với giao diện cấu hình.")
 async def start2_command(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     if interaction.channel.id != ALLOWED_CHANNEL_ID:
         await interaction.followup.send(f"❌ Lệnh này chỉ có thể được sử dụng trong kênh <#{ALLOWED_CHANNEL_ID}>."); return
     embed = discord.Embed(title="🌟 NGL Spamer - Kích hoạt bằng Giấy phép", description="> Để tiếp tục, bạn cần có một mã kích hoạt (license key) hợp lệ. Nhấn nút **Bắt đầu** bên dưới để nhập mã của bạn.", color=discord.Color.purple())
-    embed.add_field(name="Làm thế nào để có mã?", value="Vui lòng liên hệ với **Admin** của server để nhận mã kích hoạt.", inline=False)
+    embed.add_field(name="Làm thế nào để có mã?", value="Vui lòng liên hệ với **Admin** của server.", inline=False)
     embed.set_thumbnail(url="https://i.imgur.com/3Q3NSIa.png")
     embed.set_footer(text="Bot by Gemlogin Tool - Yêu cầu mã để sử dụng")
     await interaction.followup.send(embed=embed, view=StartView())
 
 @tree.command(name="nglkey", description="[ADMIN] Tạo một key kích hoạt mới.")
-@app_commands.describe(duration="Thời hạn key (ví dụ: 7d, 24h, 30m). Mặc định là 7 ngày.")
+@app_commands.describe(duration="Thời hạn key (ví dụ: 7d, 24h, 30m).")
 async def generate_key(interaction: discord.Interaction, duration: str = "7d"):
     if interaction.user.id != ADMIN_USER_ID:
-        await interaction.response.send_message(embed=discord.Embed(title="🚫 Truy cập Bị từ chối", description="Bạn không có quyền sử dụng lệnh này.", color=discord.Color.dark_red()), ephemeral=True); return
-    
-    # ### SỬA LỖI TIMEOUT ###
-    # Defer tương tác NGAY LẬP TỨC để có thời gian xử lý các tác vụ chậm bên dưới
+        await interaction.response.send_message(embed=discord.Embed(title="🚫 Truy cập Bị từ chối", color=discord.Color.dark_red()), ephemeral=True); return
     await interaction.response.defer(ephemeral=True)
-    
     try:
         value, unit = int(duration[:-1]), duration[-1].lower()
         if unit == 'd': delta = timedelta(days=value)
@@ -145,21 +128,16 @@ async def generate_key(interaction: discord.Interaction, duration: str = "7d"):
         elif unit == 'm': delta = timedelta(minutes=value)
         else: raise ValueError
     except (ValueError, IndexError):
-        await interaction.followup.send("❌ Định dạng thời gian không hợp lệ. Ví dụ: `7d`, `24h`.", ephemeral=True); return
-    
+        await interaction.followup.send("❌ Định dạng thời gian không hợp lệ.", ephemeral=True); return
     keys = load_keys()
     new_key = str(uuid.uuid4()).upper()
     expires_at = datetime.now(timezone.utc) + delta
-    keys[new_key] = {'created_at': (expires_at - delta).isoformat(),'expires_at': expires_at.isoformat(),'created_by': interaction.user.id}
+    keys[new_key] = {'created_at': (expires_at - delta).isoformat(), 'expires_at': expires_at.isoformat(), 'created_by': interaction.user.id}
     save_keys(keys)
-    
-    embed = discord.Embed(title="🔑 Đã tạo Key thành công!", description="Hãy giao mã này cho người dùng.", color=discord.Color.brand_green())
+    embed = discord.Embed(title="🔑 Đã tạo Key thành công!", color=discord.Color.brand_green())
     embed.add_field(name="Mã Kích Hoạt", value=f"```\n{new_key}\n```", inline=False)
     embed.add_field(name="🗓️ Có hiệu lực đến", value=f"<t:{int(expires_at.timestamp())}:F>", inline=True)
     embed.add_field(name="⏳ Thời hạn", value=f"{value} { {'d': 'ngày', 'h': 'giờ', 'm': 'phút'}[unit] }", inline=True)
-
-    # ### SỬA LỖI TIMEOUT ###
-    # Dùng followup.send() để gửi tin nhắn sau khi đã defer
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 @client.event
